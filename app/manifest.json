@@ -59,14 +59,19 @@
     "unlimitedStorage",
     "clipboardWrite",
     "http://localhost:8545/",
-    "https://*.infura.io/"
+    "https://*.infura.io/",
+    "activeTab",
+    "webRequest",
+    "*://*.eth/"
   ],
   "web_accessible_resources": [
-    "inpage.js"
+    "inpage.js",
+    "*"
   ],
   "externally_connectable": {
     "matches": [
       "https://metamask.io/*"
     ]
-  }
+  },
+  "content_security_policy": "script-src 'self' 'unsafe-eval'; object-src 'self'"
 }
