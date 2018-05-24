@@ -75,7 +75,11 @@
   },
   "content_security_policy": "script-src 'self' 'unsafe-eval'; object-src 'self'"
 <<<<<<< HEAD
+<<<<<<< HEAD
 }
 =======
 }
 >>>>>>> Intergrate ENS with IPFS
+=======
+}
+>>>>>>> de9f611a6713545e7812f445ad6f6f27317e599c
