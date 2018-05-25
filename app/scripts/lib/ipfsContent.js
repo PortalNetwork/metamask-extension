@@ -15,6 +15,7 @@ module.exports = function (provider) {
             resolver.resolve(name, provider).then(ipfsHash => {
                 clearTimeout(clearTime)
                 let url = 'https://gateway.ipfs.io/ipfs/' + ipfsHash
+                console.log('url=>',url);
                 return fetch(url, { method: 'HEAD' }).then(response => response.status).then(statusCode => {
                     if (statusCode !== 200) return 'Local'
                     extension.tabs.update(tab.id, { url: url })
