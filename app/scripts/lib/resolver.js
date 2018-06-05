@@ -7,8 +7,9 @@ const EthContract = require('ethjs-contract')
 const registrarAbi = require('./contracts/registrar')
 const resolverAbi = require('./contracts/resolver')
 
-function ens (name, provider) {
-  const eth = new Eth(new HttpProvider(provider.rpcTarget))
+function ens(name, provider) {
+  // const eth = new Eth(new HttpProvider(provider.rpcTarget))
+  const eth = new Eth(new HttpProvider("https://mainnet.infura.io/"))
   const hash = namehash.hash(name)
   const contract = new EthContract(eth)
   const Registrar = contract(registrarAbi).at(REGISTRAR_ENS_MAIN_NET)
