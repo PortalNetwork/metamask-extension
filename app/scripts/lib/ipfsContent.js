@@ -1,12 +1,13 @@
 const extension = require('extensionizer')
 const resolver = require('./resolver.js')
 
+// phyrextsai.eth
 module.exports = function (provider) {
     function ipfsContent (details) {
-      const name = details.url.substring(7, details.url.length - 1)
-      
-      extension.tabs.query({active: true}, tab => {
-          extension.tabs.update(tab.id, { url: `loading.html?tabid=${tab[0].id}` })
+        const name = details.url.substring(7, details.url.length - 1)
+        console.log('name:',name);
+        extension.tabs.query({active: true}, tab => {
+            extension.tabs.update(tab.id, { url: `loading.html?tabid=${tab[0].id}` })
             resolver.resolve(name, provider).then(ipfsHash => {
                 let url = 'https://ipfs.infura.io/ipfs/' + ipfsHash
                 return fetch(url, { method: 'HEAD' }).then(response => response.status).then(statusCode => {
