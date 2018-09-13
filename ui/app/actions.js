@@ -315,6 +315,8 @@ var actions = {
   CLEAR_PENDING_TOKENS: 'CLEAR_PENDING_TOKENS',
   setPendingTokens,
   clearPendingTokens,
+
+  createCancelTransaction,
 }
 
 module.exports = actions
@@ -413,12 +415,18 @@ function createNewVaultAndRestore (password, seed) {
     log.debug(`background.createNewVaultAndRestore`)
 
     return new Promise((resolve, reject) => {
-      background.createNewVaultAndRestore(password, seed, err => {
+      background.clearSeedWordCache((err) => {
         if (err) {
           return reject(err)
         }
 
-        resolve()
+        background.createNewVaultAndRestore(password, seed, (err) => {
+          if (err) {
+            return reject(err)
+          }
+
+          resolve()
+        })
       })
     })
       .then(() => dispatch(actions.unMarkPasswordForgotten()))
@@ -1766,6 +1774,29 @@ function retryTransaction (txId) {
   }
 }
 
+function createCancelTransaction (txId, customGasPrice) {
+  log.debug('background.cancelTransaction')
+  let newTxId
+
+  return dispatch => {
+    return new Promise((resolve, reject) => {
+      background.createCancelTransaction(txId, customGasPrice, (err, newState) => {
+        if (err) {
+          dispatch(actions.displayWarning(err.message))
+          reject(err)
+        }
+
+        const { selectedAddressTxList } = newState
+        const { id } = selectedAddressTxList[selectedAddressTxList.length - 1]
+        newTxId = id
+        resolve(newState)
+      })
+    })
+    .then(newState => dispatch(actions.updateMetamaskState(newState)))
+    .then(() => newTxId)
+  }
+}
+
 //
 // config
 //
@@ -1853,9 +1884,13 @@ function hideModal (payload) {
   }
 }
 
-function showSidebar () {
+function showSidebar ({ transitionName, type }) {
   return {
     type: actions.SIDEBAR_OPEN,
+    value: {
+      transitionName,
+      type,
+    },
   }
 }
 

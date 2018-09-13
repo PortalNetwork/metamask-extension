@@ -21,6 +21,7 @@ export default class TransactionListItem extends PureComponent {
     setSelectedToken: PropTypes.func,
     nonceAndDate: PropTypes.string,
     token: PropTypes.object,
+    assetImages: PropTypes.object,
   }
 
   handleClick = () => {
@@ -100,6 +101,7 @@ export default class TransactionListItem extends PureComponent {
       methodData,
       showRetry,
       nonceAndDate,
+      assetImages,
     } = this.props
     const { txParams = {} } = transaction
 
@@ -113,6 +115,7 @@ export default class TransactionListItem extends PureComponent {
             className="transaction-list-item__identicon"
             address={txParams.to}
             diameter={34}
+            image={assetImages[txParams.to]}
           />
           <TransactionAction
             transaction={transaction}
@@ -128,6 +131,11 @@ export default class TransactionListItem extends PureComponent {
           <TransactionStatus
             className="transaction-list-item__status"
             statusKey={transaction.status}
+            title={(
+              (transaction.err && transaction.err.rpc)
+                ? transaction.err.rpc.message
+                : transaction.err && transaction.err.message
+            )}
           />
           { this.renderPrimaryCurrency() }
           { this.renderSecondaryCurrency() }

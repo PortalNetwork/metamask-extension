@@ -9,7 +9,7 @@ const classnames = require('classnames')
 const { checksumAddress } = require('../util')
 const Identicon = require('./identicon')
 // const AccountDropdowns = require('./dropdowns/index.js').AccountDropdowns
-const Tooltip = require('./tooltip-v2.js')
+const Tooltip = require('./tooltip-v2.js').default
 const copyToClipboard = require('copy-to-clipboard')
 const actions = require('../actions')
 const BalanceComponent = require('./balance-component')
@@ -34,7 +34,7 @@ function mapStateToProps (state) {
 
   return {
     network: state.metamask.network,
-    sidebarOpen: state.appState.sidebarOpen,
+    sidebarOpen: state.appState.sidebar.isOpen,
     identities: state.metamask.identities,
     accounts: state.metamask.accounts,
     tokens: state.metamask.tokens,
