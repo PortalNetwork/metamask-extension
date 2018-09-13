@@ -36,7 +36,6 @@ const TransactionController = require('./controllers/transactions')
 const BalancesController = require('./controllers/computed-balances')
 const TokenRatesController = require('./controllers/token-rates')
 const DetectTokensController = require('./controllers/detect-tokens')
-const ConfigManager = require('./lib/config-manager')
 const nodeify = require('./lib/nodeify')
 const accountImporter = require('./account-import-strategies')
 const getBuyEthUrl = require('./lib/buy-eth-url')
@@ -82,11 +81,6 @@ module.exports = class MetamaskController extends EventEmitter {
 
     // network store
     this.networkController = new NetworkController(initState.NetworkController)
-
-    // config manager
-    this.configManager = new ConfigManager({
-      store: this.store,
-    })
 
     // preferences controller
     this.preferencesController = new PreferencesController({
@@ -177,7 +171,7 @@ module.exports = class MetamaskController extends EventEmitter {
       blockTracker: this.blockTracker,
       getGasPrice: this.getGasPrice.bind(this),
     })
-    this.txController.on('newUnapprovedTx', opts.showUnapprovedTx.bind(opts))
+    this.txController.on('newUnapprovedTx', () => opts.showUnapprovedTx())
 
     this.txController.on(`tx:status-update`, (txId, status) => {
       if (status === 'confirmed' || status === 'failed') {
@@ -314,18 +308,15 @@ module.exports = class MetamaskController extends EventEmitter {
    * @returns {Object} status
    */
   getState () {
-    const wallet = this.configManager.getWallet()
     const vault = this.keyringController.store.getState().vault
-    const isInitialized = (!!wallet || !!vault)
+    const isInitialized = !!vault
 
     return {
       ...{ isInitialized },
       ...this.memStore.getFlatState(),
-      ...this.configManager.getConfig(),
       ...{
-        lostAccounts: this.configManager.getLostAccounts(),
-        seedWords: this.configManager.getSeedWords(),
-        forgottenPassword: this.configManager.getPasswordForgotten(),
+        // TODO: Remove usages of lost accounts
+        lostAccounts: [],
       },
     }
   }
@@ -407,6 +398,7 @@ module.exports = class MetamaskController extends EventEmitter {
       updateTransaction: nodeify(txController.updateTransaction, txController),
       updateAndApproveTransaction: nodeify(txController.updateAndApproveTransaction, txController),
       retryTransaction: nodeify(this.retryTransaction, this),
+      createCancelTransaction: nodeify(this.createCancelTransaction, this),
       getFilteredTxList: nodeify(txController.getFilteredTxList, txController),
       isNonceTaken: nodeify(txController.isNonceTaken, txController),
       estimateGas: nodeify(this.estimateGas, this),
@@ -726,7 +718,7 @@ module.exports = class MetamaskController extends EventEmitter {
 
     this.verifySeedPhrase()
       .then((seedWords) => {
-        this.configManager.setSeedWords(seedWords)
+        this.preferencesController.setSeedWords(seedWords)
         return cb(null, seedWords)
       })
       .catch((err) => {
@@ -775,7 +767,7 @@ module.exports = class MetamaskController extends EventEmitter {
    * @param {function} cb Callback function called with the current address.
    */
   clearSeedWordCache (cb) {
-    this.configManager.setSeedWords(null)
+    this.preferencesController.setSeedWords(null)
     cb(null, this.preferencesController.getSelectedAddress())
   }
 
@@ -1036,33 +1028,14 @@ module.exports = class MetamaskController extends EventEmitter {
   /**
    * A legacy method used to record user confirmation that they understand
    * that some of their accounts have been recovered but should be backed up.
+   * This function no longer does anything and will be removed.
    *
    * @deprecated
    * @param {Function} cb - A callback function called with a full state update.
    */
   markAccountsFound (cb) {
-    this.configManager.setLostAccounts([])
-    this.sendUpdate()
+    // TODO Remove me
     cb(null, this.getState())
-  }
-
-  /**
-   * A legacy method (probably dead code) that was used when we swapped out our
-   * key management library that we depended on.
-   *
-   * Described in:
-   * https://medium.com/metamask/metamask-3-migration-guide-914b79533cdd
-   *
-   * @deprecated
-   * @param  {} migratorOutput
-   */
-  restoreOldLostAccounts (migratorOutput) {
-    const { lostAccounts } = migratorOutput
-    if (lostAccounts) {
-      this.configManager.setLostAccounts(lostAccounts.map(acct => acct.address))
-      return this.importLostAccounts(migratorOutput)
-    }
-    return Promise.resolve(migratorOutput)
   }
 
   /**
@@ -1109,6 +1082,19 @@ module.exports = class MetamaskController extends EventEmitter {
     return state
   }
 
+  /**
+   * Allows a user to attempt to cancel a previously submitted transaction by creating a new
+   * transaction.
+   * @param {number} originalTxId - the id of the txMeta that you want to attempt to cancel
+   * @param {string=} customGasPrice - the hex value to use for the cancel transaction
+   * @returns {object} MetaMask state
+   */
+  async createCancelTransaction (originalTxId, customGasPrice, cb) {
+    await this.txController.createCancelTransaction(originalTxId, customGasPrice)
+    const state = await this.getState()
+    return state
+  }
+
   estimateGas (estimateGasParams) {
     return new Promise((resolve, reject) => {
       return this.txController.txGasUtil.query.estimateGas(estimateGasParams, (err, res) => {
@@ -1130,7 +1116,7 @@ module.exports = class MetamaskController extends EventEmitter {
    * @param {Function} cb - A callback function called when complete.
    */
   markPasswordForgotten (cb) {
-    this.configManager.setPasswordForgotten(true)
+    this.preferencesController.setPasswordForgotten(true)
     this.sendUpdate()
     cb()
   }
@@ -1140,7 +1126,7 @@ module.exports = class MetamaskController extends EventEmitter {
    * @param {Function} cb - A callback function called when complete.
    */
   unMarkPasswordForgotten (cb) {
-    this.configManager.setPasswordForgotten(false)
+    this.preferencesController.setPasswordForgotten(false)
     this.sendUpdate()
     cb()
   }
@@ -1229,8 +1215,10 @@ module.exports = class MetamaskController extends EventEmitter {
     )
     dnode.on('remote', (remote) => {
       // push updates to popup
-      const sendUpdate = remote.sendUpdate.bind(remote)
+      const sendUpdate = (update) => remote.sendUpdate(update)
       this.on('update', sendUpdate)
+      // remove update listener once the connection ends
+      dnode.on('end', () => this.removeListener('update', sendUpdate))
     })
   }
 
@@ -1280,10 +1268,12 @@ module.exports = class MetamaskController extends EventEmitter {
    * @param {*} outStream - The stream to provide public config over.
    */
   setupPublicConfig (outStream) {
+    const configStream = asStream(this.publicConfigStore)
     pump(
-      asStream(this.publicConfigStore),
+      configStream,
       outStream,
       (err) => {
+        configStream.destroy()
         if (err) log.error(err)
       }
     )
